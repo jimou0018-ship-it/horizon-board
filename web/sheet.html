@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>数据表 · Horizon Board</title>
+  <link rel="stylesheet" href="/static/common.css" />
+  <style>
+    .layout { display: flex; gap: 16px; padding: 16px 20px; }
+    .sidebar {
+      width: 200px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      height: calc(100vh - 56px - 32px);
+      overflow: auto;
+      flex-shrink: 0;
+    }
+    .sidebar .group-title {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-3);
+      letter-spacing: .5px;
+    }
+    .sheet-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 6px; cursor: pointer;
+      color: var(--text-2);
+    }
+    .sheet-item:hover { background: #f5f7fb; }
+    .sheet-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 500; }
+    .sheet-item .icon { width: 16px; text-align: center; opacity: .7; }
+
+    .main {
+      flex: 1; min-width: 0;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; flex-direction: column;
+      height: calc(100vh - 56px - 32px);
+    }
+    .toolbar {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .toolbar .title { font-size: 16px; font-weight: 600; margin-right: 12px; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar input, .toolbar select { height: 32px; }
+
+    .table-wrap { flex: 1; overflow: auto; }
+    table.grid {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    table.grid thead th {
+      position: sticky; top: 0; background: #fafbfc; z-index: 1;
+      text-align: left; padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600; color: var(--text-2);
+      white-space: nowrap;
+    }
+    table.grid tbody td {
+      padding: 0;
+      border-bottom: 1px solid #f0f2f5;
+      vertical-align: middle;
+    }
+    table.grid tbody tr:hover { background: #fafbff; }
+    table.grid tbody tr.selected { background: #ebf1ff; }
+    .cell-input {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid transparent; background: transparent;
+      border-radius: 0; outline: none; font: inherit; color: inherit;
+    }
+    .cell-input:focus { border-color: var(--primary); background: #fff; }
+    td.num .cell-input { text-align: right; font-variant-numeric: tabular-nums; }
+    td.url-cell { padding: 8px 12px; }
+    td.url-cell a {
+      display: inline-block; max-width: 220px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      vertical-align: middle;
+    }
+    td.checkbox { width: 36px; padding: 0 0 0 12px; }
+    th.checkbox { width: 36px; padding-left: 12px; }
+
+    .footer-bar {
+      padding: 10px 16px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+      background: #fafbfc;
+    }
+    .footer-bar .pager { display: flex; align-items: center; gap: 6px; }
+    .footer-bar .pager button { padding: 4px 10px; }
+
+    .col-name { min-width: 180px; }
+    .col-url { min-width: 200px; }
+    .col-date { width: 110px; }
+    .col-platform { width: 100px; }
+    .col-num { width: 100px; }
+    .col-actions { width: 80px; }
+
+    .platform-tag {
+      display: inline-block; padding: 1px 8px; border-radius: 10px;
+      font-size: 12px; line-height: 18px;
+    }
+    .platform-tag.douyin   { background: #fff0f3; color: #e02d52; }
+    .platform-tag.xhs      { background: #ffeeee; color: #ff2442; }
+    .platform-tag.bili     { background: #e6f6ff; color: #00a1d6; }
+    .platform-tag.kuaishou { background: #fff4e0; color: #ff7a00; }
+    .platform-tag.other    { background: #eef0f4; color: #5e6573; }
+  </style>
+</head>
+<body>
+  <div id="topbar"></div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="group-title">数据表</div>
+      <div id="sheetList"></div>
+    </aside>
+
+    <section class="main">
+      <div class="toolbar">
+        <div class="title" id="sheetTitle">—</div>
+        <input type="text" id="kw" placeholder="搜索热点名称 / 关键字" style="width: 220px;" />
+        <select id="filterPlatform">
+          <option value="">全部平台</option>
+          <option value="抖音">抖音</option>
+          <option value="小红书">小红书</option>
+          <option value="B站">B站</option>
+          <option value="快手">快手</option>
+        </select>
+        <input type="date" id="filterFrom" title="起始日期" />
+        <input type="date" id="filterTo" title="结束日期" />
+        <button id="btnSearch">筛选</button>
+        <button id="btnReset">重置</button>
+        <div class="spacer"></div>
+        <button id="btnAdd" class="primary">+ 新增</button>
+        <button id="btnImport">导入 Excel</button>
+        <button id="btnExport">导出 Excel</button>
+        <button id="btnDelete" class="danger" disabled>删除选中</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="grid" id="grid">
+          <thead><tr id="theadRow"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div id="emptyState" class="empty" style="display: none;">暂无数据，可点击「+ 新增」或「导入 Excel」</div>
+      </div>
+
+      <div class="footer-bar">
+        <span class="muted" id="totalLabel">共 0 条</span>
+        <div class="spacer" style="flex:1;"></div>
+        <div class="pager">
+          <button id="prevPage">上一页</button>
+          <span id="pageLabel">1 / 1</span>
+          <button id="nextPage">下一页</button>
+          <select id="pageSize">
+            <option value="50">50/页</option>
+            <option value="100">100/页</option>
+            <option value="200">200/页</option>
+          </select>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <input type="file" id="fileInput" accept=".xlsx" style="display:none" />
+
+  <script src="/static/common.js"></script>
+  <script>
+    document.getElementById("topbar").innerHTML = renderTopbar("sheet");
+    bindTopbar();
+
+    const state = {
+      sheets: [],
+      currentSheet: null,
+      page: 1,
+      pageSize: 50,
+      total: 0,
+      rows: [],
+      selected: new Set(),
+    };
+
+    const PLATFORM_CLASS = { "抖音": "douyin", "小红书": "xhs", "B站": "bili", "快手": "kuaishou" };
+
+    async function loadSheets() {
+      state.sheets = await api("/api/sheets");
+      const list = document.getElementById("sheetList");
+      list.innerHTML = state.sheets.map(s => `
+        <div class="sheet-item" data-id="${s.id}">
+          <span class="icon">▦</span>
+          <span>${escapeHtml(s.name)}</span>
+        </div>`).join("");
+      list.querySelectorAll(".sheet-item").forEach(el => {
+        el.onclick = () => selectSheet(parseInt(el.dataset.id));
+      });
+
+      // 默认选择 URL hash 或第一个
+      const hashId = parseInt(location.hash.replace("#sheet-", ""));
+      const target = state.sheets.find(s => s.id === hashId) || state.sheets[0];
+      if (target) selectSheet(target.id);
+    }
+
+    function selectSheet(id) {
+      state.currentSheet = state.sheets.find(s => s.id === id);
+      if (!state.currentSheet) return;
+      location.hash = `sheet-${id}`;
+      document.querySelectorAll(".sheet-item").forEach(el => {
+        el.classList.toggle("active", parseInt(el.dataset.id) === id);
+      });
+      document.getElementById("sheetTitle").textContent = state.currentSheet.name;
+      renderHeader();
+      state.page = 1;
+      state.selected.clear();
+      loadRows();
+    }
+
+    function renderHeader() {
+      const fields = state.currentSheet.fields;
+      const tr = document.getElementById("theadRow");
+      let html = `<th class="checkbox"><input type="checkbox" id="checkAll" /></th>`;
+      fields.forEach(f => {
+        let cls = "";
+        if (f.name === "热点名称") cls = "col-name";
+        else if (f.name === "URL") cls = "col-url";
+        else if (f.type === "date") cls = "col-date";
+        else if (f.name === "平台") cls = "col-platform";
+        else if (f.type === "number") cls = "col-num";
+        html += `<th class="${cls}">${escapeHtml(f.name)}</th>`;
+      });
+      html += `<th class="col-actions">操作</th>`;
+      tr.innerHTML = html;
+
+      document.getElementById("checkAll").onchange = (e) => {
+        const checked = e.target.checked;
+        state.selected = checked ? new Set(state.rows.map(r => r.id)) : new Set();
+        renderBody();
+        updateDeleteBtn();
+      };
+    }
+
+    async function loadRows() {
+      const params = new URLSearchParams({
+        page: state.page,
+        page_size: state.pageSize,
+        keyword: document.getElementById("kw").value.trim(),
+        platform: document.getElementById("filterPlatform").value,
+        date_from: document.getElementById("filterFrom").value,
+        date_to: document.getElementById("filterTo").value,
+      });
+      const data = await api(`/api/sheets/${state.currentSheet.id}/rows?${params}`);
+      state.rows = data.rows;
+      state.total = data.total;
+      renderBody();
+      renderPager();
+    }
+
+    function renderBody() {
+      const fields = state.currentSheet.fields;
+      const tbody = document.getElementById("tbody");
+      const emptyEl = document.getElementById("emptyState");
+
+      if (state.rows.length === 0) {
+        tbody.innerHTML = "";
+        emptyEl.style.display = "block";
+      } else {
+        emptyEl.style.display = "none";
+        tbody.innerHTML = state.rows.map(r => {
+          const sel = state.selected.has(r.id);
+          let html = `<tr data-id="${r.id}" class="${sel ? 'selected' : ''}">`;
+          html += `<td class="checkbox"><input type="checkbox" data-row="${r.id}" ${sel ? 'checked' : ''} /></td>`;
+          for (const f of fields) {
+            const val = r.data[f.name] ?? "";
+            html += renderCell(r.id, f, val);
+          }
+          html += `<td class="col-actions"><button class="del-btn" data-id="${r.id}">删除</button></td>`;
+          html += `</tr>`;
+          return html;
+        }).join("");
+      }
+      bindRowEvents();
+      updateDeleteBtn();
+    }
+
+    function renderCell(rowId, field, val) {
+      if (field.name === "URL") {
+        const safe = escapeHtml(val);
+        const display = val ? `<a href="${safe}" target="_blank" rel="noopener">${safe}</a>` : `<span class="muted">—</span>`;
+        return `<td class="url-cell">${display} <a href="#" class="muted edit-url" data-row="${rowId}" data-field="URL" style="font-size:12px;margin-left:6px;">编辑</a></td>`;
+      }
+      if (field.name === "平台") {
+        const cls = PLATFORM_CLASS[val] || "other";
+        const display = val ? `<span class="platform-tag ${cls}">${escapeHtml(val)}</span>` : `<span class="muted">—</span>`;
+        return `<td><select class="cell-input" data-row="${rowId}" data-field="${field.name}">
+          ${["", "抖音", "小红书", "B站", "快手"].map(p => `<option value="${p}" ${p===val?'selected':''}>${p||'—'}</option>`).join("")}
+        </select></td>`;
+      }
+      if (field.type === "number") {
+        return `<td class="num"><input class="cell-input" type="number" data-row="${rowId}" data-field="${field.name}" value="${escapeHtml(val)}" /></td>`;
+      }
+      if (field.type === "date") {
+        return `<td><input class="cell-input" type="date" data-row="${rowId}" data-field="${field.name}" value="${escapeHtml(val)}" /></td>`;
+      }
+      return `<td><input class="cell-input" type="text" data-row="${rowId}" data-field="${field.name}" value="${escapeHtml(val)}" /></td>`;
+    }
+
+    function bindRowEvents() {
+      document.querySelectorAll('input[type=checkbox][data-row]').forEach(el => {
+        el.onchange = () => {
+          const id = parseInt(el.dataset.row);
+          if (el.checked) state.selected.add(id); else state.selected.delete(id);
+          el.closest("tr").classList.toggle("selected", el.checked);
+          updateDeleteBtn();
+        };
+      });
+      document.querySelectorAll(".cell-input").forEach(el => {
+        el.addEventListener("change", () => saveCell(el));
+      });
+      document.querySelectorAll(".edit-url").forEach(el => {
+        el.onclick = (e) => {
+          e.preventDefault();
+          const id = parseInt(el.dataset.row);
+          const row = state.rows.find(r => r.id === id);
+          const v = prompt("编辑 URL：", row.data["URL"] || "");
+          if (v === null) return;
+          row.data["URL"] = v.trim();
+          api(`/api/sheets/${state.currentSheet.id}/rows/${id}`, { method: "PUT", body: { data: row.data } })
+            .then(() => { renderBody(); Toast.show("已保存", "success"); })
+            .catch(err => Toast.show(err.message, "error"));
+        };
+      });
+      document.querySelectorAll(".del-btn").forEach(el => {
+        el.onclick = () => {
+          const id = parseInt(el.dataset.id);
+          if (!confirm("确定删除该条数据？")) return;
+          api(`/api/sheets/${state.currentSheet.id}/rows/${id}`, { method: "DELETE" })
+            .then(() => { Toast.show("已删除", "success"); loadRows(); });
+        };
+      });
+    }
+
+    async function saveCell(el) {
+      const id = parseInt(el.dataset.row);
+      const field = el.dataset.field;
+      const row = state.rows.find(r => r.id === id);
+      let v = el.value;
+      const fieldMeta = state.currentSheet.fields.find(f => f.name === field);
+      if (fieldMeta && fieldMeta.type === "number") {
+        v = v === "" ? "" : Number(v);
+      }
+      row.data[field] = v;
+      try {
+        await api(`/api/sheets/${state.currentSheet.id}/rows/${id}`, { method: "PUT", body: { data: row.data } });
+      } catch (e) {
+        Toast.show(e.message, "error");
+      }
+    }
+
+    function updateDeleteBtn() {
+      document.getElementById("btnDelete").disabled = state.selected.size === 0;
+      const ck = document.getElementById("checkAll");
+      if (ck) ck.checked = state.rows.length > 0 && state.rows.every(r => state.selected.has(r.id));
+    }
+
+    function renderPager() {
+      const pages = Math.max(1, Math.ceil(state.total / state.pageSize));
+      document.getElementById("totalLabel").textContent = `共 ${state.total} 条`;
+      document.getElementById("pageLabel").textContent = `${state.page} / ${pages}`;
+      document.getElementById("prevPage").disabled = state.page <= 1;
+      document.getElementById("nextPage").disabled = state.page >= pages;
+    }
+
+    document.getElementById("prevPage").onclick = () => { state.page--; loadRows(); };
+    document.getElementById("nextPage").onclick = () => { state.page++; loadRows(); };
+    document.getElementById("pageSize").onchange = (e) => { state.pageSize = parseInt(e.target.value); state.page = 1; loadRows(); };
+    document.getElementById("btnSearch").onclick = () => { state.page = 1; loadRows(); };
+    document.getElementById("btnReset").onclick = () => {
+      document.getElementById("kw").value = "";
+      document.getElementById("filterPlatform").value = "";
+      document.getElementById("filterFrom").value = "";
+      document.getElementById("filterTo").value = "";
+      state.page = 1; loadRows();
+    };
+    document.getElementById("kw").addEventListener("keydown", (e) => { if (e.key === "Enter") { state.page = 1; loadRows(); } });
+
+    document.getElementById("btnAdd").onclick = async () => {
+      const empty = {};
+      for (const f of state.currentSheet.fields) empty[f.name] = "";
+      empty["日期"] = todayISO();
+      await api(`/api/sheets/${state.currentSheet.id}/rows`, { method: "POST", body: { data: empty } });
+      Toast.show("已新增", "success");
+      state.page = 1;
+      loadRows();
+    };
+
+    document.getElementById("btnDelete").onclick = async () => {
+      if (state.selected.size === 0) return;
+      if (!confirm(`确定删除选中的 ${state.selected.size} 条？`)) return;
+      await api(`/api/sheets/${state.currentSheet.id}/rows/batch_delete`, {
+        method: "POST",
+        body: { ids: Array.from(state.selected) },
+      });
+      state.selected.clear();
+      Toast.show("已删除", "success");
+      loadRows();
+    };
+
+    document.getElementById("btnImport").onclick = () => {
+      document.getElementById("fileInput").click();
+    };
+    document.getElementById("fileInput").onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const mode = confirm("点击「确定」追加导入；点击「取消」清空后导入") ? "append" : "replace";
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("mode", mode);
+      try {
+        const res = await fetch(`/api/sheets/${state.currentSheet.id}/import`, {
+          method: "POST", body: fd, credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || "导入失败");
+        const data = await res.json();
+        Toast.show(`已导入 ${data.imported} 条`, "success");
+        loadRows();
+      } catch (err) {
+        Toast.show(err.message, "error");
+      } finally {
+        e.target.value = "";
+      }
+    };
+
+    document.getElementById("btnExport").onclick = () => {
+      window.location.href = `/api/sheets/${state.currentSheet.id}/export`;
+    };
+
+    loadSheets();
+  </script>
+</body>
+</html>

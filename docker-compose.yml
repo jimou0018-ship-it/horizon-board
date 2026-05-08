@@ -1,0 +1,10 @@
+services:
+  horizon-board:
+    build: .
+    container_name: horizon-board
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据库持久化到宿主机
+      - ./data:/app/data
