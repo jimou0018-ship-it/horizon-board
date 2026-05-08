@@ -1,5 +1,7 @@
 # Horizon Board
 
+[![Python](https://img.shields.io/badge/python-3.10+-blue)]() [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
+
 > 轻量数据看板。多 Sheet 数据表 + Excel 导入导出 + 看板分析。无登录，直接访问。
 
 ## 功能
